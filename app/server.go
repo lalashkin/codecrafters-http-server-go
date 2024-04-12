@@ -16,9 +16,34 @@ func main() {
 		os.Exit(1)
 	}
 	
-	_, err = l.Accept()
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
-		os.Exit(1)
+	for {
+		conn, err := l.Accept()
+
+		go handleConnection(conn)
+
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			os.Exit(1)
+		}
 	}
+}
+
+func handleConnection(conn net.Conn) {
+
+	defer conn.Close()
+
+	var recv []byte
+
+	_, err := conn.Read(recv)
+	if err != nil {
+		panic(err)
+	}
+
+	statOk := "HTTP/1.1 200 OK\r\n\r\n"
+
+	_, err = conn.Write([]byte(statOk))
+	if err != nil {
+		panic(err)
+	}
+
 }
