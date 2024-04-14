@@ -1,18 +1,26 @@
 package main
 
 import (
-	"fmt"
+	"bufio"
 	"net"
 	"os"
+	"log"
+	"strings"
 )
 
+// Req is arriving HTTP request
+type Req struct {
+	method string
+	path string
+	ver string
+}
+
 func main() {
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
-	fmt.Println("Logs from your program will appear here!")
+	log.Println("Starting ad-hoc TCP server...")
 	
 	l, err := net.Listen("tcp", "0.0.0.0:4221")
 	if err != nil {
-		fmt.Println("Failed to bind to port 4221")
+		log.Println("Failed to bind to port 4221")
 		os.Exit(1)
 	}
 	
@@ -22,28 +30,52 @@ func main() {
 		go handleConnection(conn)
 
 		if err != nil {
-			fmt.Println("Error accepting connection: ", err.Error())
+			log.Println("Error accepting connection: ", err.Error())
 			os.Exit(1)
 		}
 	}
 }
 
 func handleConnection(conn net.Conn) {
-
 	defer conn.Close()
 
-	var recv []byte
+	reqString := readPayload(conn)
 
-	_, err := conn.Read(recv)
+	reqStringSlice := strings.Split(reqString, "\r\n")
+
+	startLineSlice := strings.Split(reqStringSlice[0], " ")
+
+	req := &Req{method: startLineSlice[0], path: startLineSlice[1], ver: startLineSlice[2]}
+
+	log.Printf("Composed request obj: %s", req)
+
+	var resp string
+
+	switch req.path {
+	case "/":
+		resp = "HTTP/1.1 200 OK\r\n\r\n"
+	case "/index.html":
+		resp = "HTTP/1.1 404 Not Found\r\n\r\n"
+	}
+
+	_, err := conn.Write([]byte(resp))
 	if err != nil {
 		panic(err)
 	}
 
-	statOk := "HTTP/1.1 200 OK\r\n\r\n"
+}
 
-	_, err = conn.Write([]byte(statOk))
+func readPayload(conn net.Conn) string {
+
+	reader := bufio.NewReader(conn)
+	recv := make([]byte, 1024)
+
+	_, err := reader.Read(recv)
+
 	if err != nil {
 		panic(err)
 	}
 
+	log.Printf("Read: %s", string(recv))
+	return string(recv)
 }
