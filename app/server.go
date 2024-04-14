@@ -54,7 +54,7 @@ func handleConnection(conn net.Conn) {
 	switch req.path {
 	case "/":
 		resp = "HTTP/1.1 200 OK\r\n\r\n"
-	case "/index.html":
+	default:
 		resp = "HTTP/1.1 404 Not Found\r\n\r\n"
 	}
 
