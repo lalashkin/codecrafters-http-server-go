@@ -15,16 +15,16 @@ type HTTPReq struct {
 	method  string
 	path    string
 	ver     string
-	headers []string
+	headers map[string]string
 	body    string
 }
 
 // HTTPResp is outbound HTTP response
 type HTTPResp struct {
 	version string
-	status string
-	headers []string
-	body string
+	status  string
+	headers map[string]string
+	body    string
 }
 
 func (resp HTTPResp) String() string {
@@ -33,8 +33,8 @@ func (resp HTTPResp) String() string {
 
 	s.WriteString(fmt.Sprintf("%s %s\r\n", resp.version, resp.status))
 
-	for _, header := range resp.headers {
-		s.WriteString(fmt.Sprintf("%s\r\n", header))
+	for hName, hVal := range resp.headers {
+		s.WriteString(fmt.Sprintf("%s: %s\r\n", hName, hVal))
 	}
 
 	s.WriteString("\r\n")
@@ -71,37 +71,38 @@ func handleConnection(conn net.Conn) {
 
 	resp := HTTPResp{
 		version: "HTTP/1.1",
-		// headers: []string{
-		// 	"Server: lalashkin/0.0.1",
-		// },
+		headers: make(map[string]string),
 	}
 
-	switch  {
+	switch {
 	case req.path == "/":
 		resp.status = "200 OK"
-		resp.headers = append(resp.headers,
-			"Content-Length: 0",
-		)
+		resp.headers["Content-Length"] = "0"
 
 	case strings.HasPrefix(req.path, "/echo"):
 
 		reqContent, _ := strings.CutPrefix(req.path, "/echo/")
 
 		resp.status = "200 OK"
-		resp.headers = append(resp.headers,
-			"Content-Type: text/plain",
-			fmt.Sprintf("Content-Length: %d", len(reqContent)),
-		)
+		resp.headers["Content-Type"] = "text/plain"
+		resp.headers["Content-Length"] = fmt.Sprintf("%d", len(reqContent))
 		resp.body = reqContent
+
+	case strings.HasPrefix(req.path, "/user-agent"):
+
+		reqUAgent := req.headers["User-Agent"]
+
+		resp.status = "200 OK"
+		resp.headers["Content-Type"] = "text/plain"
+		resp.headers["Content-Length"] = fmt.Sprintf("%d", len(reqUAgent))
+		resp.body = reqUAgent
 
 	default:
 		resp.status = "404 Not Found"
-		resp.headers = append(resp.headers,
-			"Content-Length: 0",
-		)
+		resp.headers["Content-Length"] = "0"
 	}
 
-	log.Printf("Composed response obj: %s", resp)
+	log.Printf("Response:\n%s", resp)
 
 	_, err := conn.Write([]byte(resp.String()))
 	if err != nil {
@@ -114,9 +115,10 @@ func readPayload(conn net.Conn) HTTPReq {
 
 	reader := bufio.NewReader(conn)
 
-	bytesRead := 0
 	index := 0
-	var req HTTPReq
+	req := HTTPReq{
+		headers: make(map[string]string),
+	}
 
 	for {
 		line, err := reader.ReadBytes('\n')
@@ -127,11 +129,10 @@ func readPayload(conn net.Conn) HTTPReq {
 		}
 
 		n := len(line)
-		bytesRead += n
-		
+
 		if bytes.HasSuffix(line, []byte("\r\n")) {
 
-			trLine := line[:n - 2]
+			trLine := line[:n-2]
 			if len(trLine) == 0 {
 				break
 			}
@@ -139,13 +140,14 @@ func readPayload(conn net.Conn) HTTPReq {
 			switch index {
 			case 0:
 				startLine := bytes.Split(trLine, []byte(" "))
-				req = HTTPReq{
-					method: string(startLine[0]),
-					path:   string(startLine[1]),
-					ver:    string(startLine[2]),
-				}
+				req.method = string(startLine[0])
+				req.path = string(startLine[1])
+				req.ver = string(startLine[2])
 			default:
-				req.headers = append(req.headers, string(trLine))
+				hLine := string(trLine)
+				hName := string(strings.Split(hLine, ": ")[0])
+				hVal := string(strings.Split(hLine, ": ")[1])
+				req.headers[hName] = hVal
 			}
 		}
 
