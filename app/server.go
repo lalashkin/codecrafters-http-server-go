@@ -88,7 +88,8 @@ func handleConnection(conn net.Conn) {
 		reqContent := strings.Split(req.path, "/")[2]
 
 		resp.status = "200 OK"
-		resp.headers = append(resp.headers, 
+		resp.headers = append(resp.headers,
+			"Content-Type: text/plain",
 			fmt.Sprintf("Content-Length: %d", len(reqContent)),
 		)
 		resp.body = reqContent
