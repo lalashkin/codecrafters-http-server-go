@@ -71,9 +71,9 @@ func handleConnection(conn net.Conn) {
 
 	resp := HTTPResp{
 		version: "HTTP/1.1",
-		headers: []string{
-			"Server: lalashkin/0.0.1",
-		},
+		// headers: []string{
+		// 	"Server: lalashkin/0.0.1",
+		// },
 	}
 
 	switch  {
