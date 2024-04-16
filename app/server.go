@@ -150,8 +150,6 @@ func readPayload(conn net.Conn) HTTPReq {
 				req.headers[hName] = hVal
 			}
 		}
-
-		log.Printf("Line: %s", line)
 		index++
 	}
 
