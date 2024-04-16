@@ -85,7 +85,7 @@ func handleConnection(conn net.Conn) {
 
 	case strings.HasPrefix(req.path, "/echo"):
 
-		reqContent := strings.Split(req.path, "/echo/")[1]
+		reqContent, _ := strings.CutPrefix(req.path, "/echo/")
 
 		resp.status = "200 OK"
 		resp.headers = append(resp.headers,
