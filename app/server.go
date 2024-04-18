@@ -48,7 +48,7 @@ func (resp HTTPResp) String() string {
 
 func main() {
 	log.Println("Starting ad-hoc TCP server...")
-	
+
 	var servingDir string
 	flag.StringVar(&servingDir, "directory", "", "Directory to serve files from")
 	flag.Parse()
@@ -95,25 +95,42 @@ func handleConnection(conn net.Conn, servingDir string) {
 		srvFile, _ := strings.CutPrefix(req.path, "/files/")
 		srvFile = filepath.Join(servingDir, srvFile)
 
-		if _, err := os.Stat(srvFile); err == nil {
-			data, err := os.ReadFile(srvFile)
-			if err != nil {
-				log.Fatalf("Cannot open %s", srvFile)
+		switch {
+		case req.method == "GET":
+
+			if _, err := os.Stat(srvFile); err == nil {
+				data, err := os.ReadFile(srvFile)
+				if err != nil {
+					log.Fatalf("Cannot open %s", srvFile)
+				}
+
+				resp.status = "200 OK"
+				resp.headers["Content-Type"] = "application/octet-stream"
+				resp.headers["Content-Length"] = fmt.Sprintf("%d", len(data))
+				resp.body = string(data)
+
+			} else if errors.Is(err, os.ErrNotExist) {
+				resp.status = "404 Not Found"
+				resp.headers["Content-Length"] = "0"
+			} else {
+				log.Fatalf("Error applying stat for %s", srvFile)
 			}
 
-			resp.status = "200 OK"
-			resp.headers["Content-Type"] = "application/octet-stream"
-			resp.headers["Content-Length"] = fmt.Sprintf("%d", len(data))
-			resp.body = string(data)
+		case req.method == "POST":
+			f, err := os.OpenFile(srvFile, os.O_CREATE|os.O_RDWR, 0755)
+			defer f.Close()
+			if err != nil {
+				log.Fatal(err)
+			}
 
-		} else if errors.Is(err, os.ErrNotExist) {
-			resp.status = "404 Not Found"
+			_, err = f.WriteString(req.body)
+			if err != nil {
+				log.Fatal(err)
+			}
+			resp.status = "201 Created"
+			resp.headers["Content-Type"] = "text/plain"
 			resp.headers["Content-Length"] = "0"
-		} else {
-			log.Fatalf("Error applying stat for %s", srvFile)
 		}
-
-
 	case strings.HasPrefix(req.path, "/echo"):
 
 		reqContent, _ := strings.CutPrefix(req.path, "/echo/")
@@ -169,6 +186,18 @@ func readPayload(conn net.Conn) HTTPReq {
 
 			trLine := line[:n-2]
 			if len(trLine) == 0 {
+
+				bodyLen := reader.Buffered()
+				bodyData := make([]byte, bodyLen)
+
+				_, err := reader.Read(bodyData)
+
+				req.body = string(bodyData)
+
+				if err != nil {
+					log.Fatal("Error reading request body")
+				}
+
 				break
 			}
 
