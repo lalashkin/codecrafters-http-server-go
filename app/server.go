@@ -3,10 +3,13 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -45,6 +48,14 @@ func (resp HTTPResp) String() string {
 
 func main() {
 	log.Println("Starting ad-hoc TCP server...")
+	
+	var servingDir string
+	flag.StringVar(&servingDir, "directory", "", "Directory to serve files from")
+	flag.Parse()
+
+	if servingDir != "" {
+		log.Printf("Serving files from %s", servingDir)
+	}
 
 	l, err := net.Listen("tcp", "0.0.0.0:4221")
 	if err != nil {
@@ -55,7 +66,7 @@ func main() {
 	for {
 		conn, err := l.Accept()
 
-		go handleConnection(conn)
+		go handleConnection(conn, servingDir)
 
 		if err != nil {
 			log.Println("Error accepting connection: ", err.Error())
@@ -64,7 +75,7 @@ func main() {
 	}
 }
 
-func handleConnection(conn net.Conn) {
+func handleConnection(conn net.Conn, servingDir string) {
 	defer conn.Close()
 
 	req := readPayload(conn)
@@ -78,6 +89,30 @@ func handleConnection(conn net.Conn) {
 	case req.path == "/":
 		resp.status = "200 OK"
 		resp.headers["Content-Length"] = "0"
+
+	case strings.HasPrefix(req.path, "/files"):
+
+		srvFile, _ := strings.CutPrefix(req.path, "/files/")
+		srvFile = filepath.Join(servingDir, srvFile)
+
+		if _, err := os.Stat(srvFile); err == nil {
+			data, err := os.ReadFile(srvFile)
+			if err != nil {
+				log.Fatalf("Cannot open %s", srvFile)
+			}
+
+			resp.status = "200 OK"
+			resp.headers["Content-Type"] = "application/octet-stream"
+			resp.headers["Content-Length"] = fmt.Sprintf("%d", len(data))
+			resp.body = string(data)
+
+		} else if errors.Is(err, os.ErrNotExist) {
+			resp.status = "404 Not Found"
+			resp.headers["Content-Length"] = "0"
+		} else {
+			log.Fatalf("Error applying stat for %s", srvFile)
+		}
+
 
 	case strings.HasPrefix(req.path, "/echo"):
 
